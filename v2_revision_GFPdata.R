@@ -1,0 +1,388 @@
+# Script name 03_MakeSummaryDataPerImage.R as part of
+# 00_SetGlobalVars_XXX.R
+# 01_Functions.R
+# 02_MakeSingleCellDataList.R
+# 03_MakeSummaryDataPerImage.R
+# 04_MakeDataForModeling.R
+# 05_CellDeathFigures.R
+# 06_MakeOtherPlots.R
+# 07_CombineReplicates.R
+# 08_FinalMeanFigures.R
+# 
+# Short description:
+# R script to combine single cell imaging data of 
+# 1) p53, Mdm2, Btg2 and p21 reporters
+# 2) up to 4 replicates, and 
+# 3) GFP channels and AnV channels, that is contained in variable dfListSCD
+# into a matrix called "summaryData" and 
+# the normalized data matrix stored in "summaryDataNorm". 
+
+# Starting data: 2018-07-19
+# Last modified: 2022-03-31
+# Written by Muriel Heldring
+
+# R version 4.1.1 (2021-08-10) -- "Kick Things"
+
+# Clear environment
+rm(list = ls())
+gc()
+
+# Load the packages
+library(tidyverse)
+library(rlang)
+library(lemon)
+library(data.table)
+library(splines)
+
+# Choose project
+PROJECT <- "DDP" 
+
+# Load the global variables
+load(file = paste0("/data/muriel/Projects/",PROJECT,"/DataAnalysis/Dynamics/Output/RData/00_constants.RData"))
+# Load the functions
+source(paste0("/data/muriel/Projects/","DDP","/DataAnalysis/Dynamics/","RScripts_ImagingDataAnalysis/01_Functions.R"))
+
+# Choose project
+PROJECT_PATH <- DDP_FOLDER_PATH 
+
+# Load the data or the environment from script 02
+load(file = paste0(PROJECT_PATH,OUTPUT_PATH,"RData/","03_SingleCellData.RData")) # Load only the data frame
+
+DATE <- "20220411" 
+outputDir_GR <- "/data/muriel/Projects/DDP/DataAnalysis/BioSpyder/Exp009_BioSpyder_Marije/DEGAnalysis/Output/Figures/"
+
+if (PROJECT == "DDP"){
+  REPLICATE_ORDER <- c("1","2","3","4")
+  PROTEIN_ORDER <- c("p53","MDM2","p21","BTG2")
+} else if (PROJECT == "INF") {
+  REPLICATE_ORDER <- c("1","2","3")
+  PROTEIN_ORDER = c("ICAM1","A20")
+}
+
+dir.create(paste0(outputDir_GR,DATE,"_GFPdata_Figs"))
+
+# -----------------------------------------------------------------------------
+# ----------------------------MAKE SUMMARY DATA--------------------------------
+# -----------------------------------------------------------------------------
+
+# Make column with well information
+dfListSCD <- extractWell(dfListSCD)
+
+# ------------------ CALCULATE AVERAGE OF CELLS IN ONE IMAGE ------------------
+summaryDataPerImage <- combineProteinSummariesPerImage(dfListSCD, CHANNELS)
+
+# Remove dfListSCD from environment, because it is very big
+rm("dfListSCD")
+rm(btg2_rep1,btg2sum)
+gc()
+
+# Rename locationID columns
+summaryDataPerImage$imageNumber <- substr(summaryDataPerImage$locationID,5,5)
+
+# Ungroup
+summaryDataPerImage <- summaryDataPerImage %>% ungroup()
+
+# Set some columns classes to factor
+summaryDataPerImage <- summaryDataPerImage %>% 
+  mutate(treatment = factor(treatment),
+         dose_uM = factor(dose_uM),
+         locationID = as.factor(locationID),
+         imageNumber = factor(imageNumber),
+         well = factor(well),
+         replID = factor(replID))
+
+# Save the summary data as it is
+save(summaryDataPerImage, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/04_", "summaryDataPerImage.RData"))  # Save only the data frame
+#load(file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/04_", "summaryDataPerImage.RData"))  # Load the data frame
+
+# -------------------MAKE PLOTS OF THE TECHNICAL REPLICATES PER WELL-------------------
+dirPath <- paste0(PROJECT_PATH,OUTPUT_PATH,"Figures/",DATE,"_TechnicalReplicates/")
+dir.create(file.path(dirPath))
+
+for (p in PROTS_OF_INTEREST) {
+  for (t in COMPS_OF_INTEREST) {
+    dftmp <- summaryDataPerImage %>% filter(protein == p & 
+                                              treatment == t) 
+    for (r in c(1,2,3,4)) {
+      if (r %in% levels(droplevels(dftmp$replID))) {
+        dftmp2 <- dftmp %>% filter(replID == r) %>% select(timeID,well,imageNumber, GM10Nuclei_Integrated_Intensity, GM10Cytoplasm_Integrated_Intensity,imageCountParentObj)
+        dftmp_piv <- dftmp2 %>% pivot_wider(names_from = imageNumber, values_from = c(GM10Nuclei_Integrated_Intensity,GM10Cytoplasm_Integrated_Intensity,imageCountParentObj))
+        
+        if (p %in% c("p53","p21","MDM2")) {
+          gplottmp <- ggplot(dftmp_piv) + geom_point(aes_string(x = paste("GM10Nuclei_Integrated_Intensity","1",sep = "_"),
+                                                                y = paste("GM10Nuclei_Integrated_Intensity","2",sep = "_"), color = "well")) +
+            xlab("GFP in technical repliclate 1") + ylab("GFP in technical repliclate 2") 
+          ggsave(paste0(dirPath, "NucleiIntensity_",p,"_",t,"_rep",r,".pdf"), plot = gplottmp,width = 7, height = 5)}
+        else {
+          gplottmp <- ggplot(dftmp_piv) + geom_point(aes_string(x = paste("GM10Cytoplasm_Integrated_Intensity","1",sep = "_"),
+                                                                y = paste("GM10Cytoplasm_Integrated_Intensity","2",sep = "_"), color = "well")) +
+            xlab("GFP in technical repliclate 1") + ylab("GFP in technical repliclate 2") 
+          ggsave(paste0(dirPath, "CytoplamsIntensity_",p,"_",t,"_rep",r,".pdf"), plot = gplottmp,width = 7, height = 5)}
+        
+        gplottmp <- ggplot(dftmp_piv) + geom_point(aes_string(x = paste("imageCountParentObj","1",sep = "_"),
+                                                              y = paste("imageCountParentObj","2",sep = "_"), color = "well")) +
+          xlab("Cell count in technical repliclate 1") + ylab("Cell count in technical repliclate 2") 
+        ggsave(paste0(dirPath, "CellCount",p,"_",t,"_rep",r,".pdf"), plot = gplottmp,width = 7, height = 5)
+      }}}}
+
+# -------------------REMOVE TECHNICAL REPLICATES-------------------
+if (PROJECT == "DDP"){
+  summaryDataPerImageFiltered <- summaryDataPerImage %>% 
+    filter(!((protein == "p21" & treatment == "DMEM" & replID == 4 & locationID == "F23_1") | 
+               (protein == "p53" & treatment == "ETO" & replID == 3 & locationID == "H19_2") |
+               (protein %in% c("MDM2","p21","BTG2") & replID == 1 & treatment == "MYT")))
+} else if (PROJECT == "INF") {summaryDataPerImageFiltered <- summaryDataPerImage %>%
+  filter(!(protein == "ICAM1" & treatment == "ETO" & replID == 1 & locationID == "J19_1"))}
+
+
+# Save the filtered summary data
+save(summaryDataPerImageFiltered, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/05_", "summaryDataPerImageFiltered.RData"))  # Save only the data frame
+#load(paste0(PROJECT_PATH, OUTPUT_PATH,"RData/05_", "summaryDataPerImageFiltered.RData"))  # Save only the data frame
+
+# -------------------CALCULATE AVERAGES PER WELL-------------------
+summaryData <- summaryDataPerImageFiltered %>% group_by(treatment,dose_uM,cell_line,plateID,protein,
+                                                        replID,timeID,timeAfterExposure,well) %>% 
+  summarise(imageCountParentObj = mean(imageCountParentObj, na.rm = T),
+            Cytoplasm_Mean_Intensity = ifelse(all(is.na(GM10Cytoplasm_Mean_Intensity)),NA,mean(GM10Cytoplasm_Mean_Intensity, na.rm = T)),
+            Cytoplasm_Integrated_Intensity = ifelse(all(is.na(GM10Cytoplasm_Integrated_Intensity)),NA,mean(GM10Cytoplasm_Integrated_Intensity, na.rm = T)),
+            Nuclei_Mean_Intensity = ifelse(all(is.na(GM10Nuclei_Mean_Intensity)),NA,mean(GM10Nuclei_Mean_Intensity, na.rm = T)),
+            Nuclei_Integrated_Intensity = ifelse(all(is.na(GM10Nuclei_Integrated_Intensity)),NA,mean(GM10Nuclei_Integrated_Intensity, na.rm = T)),
+            Nuclei_AreaShape_Area = mean(Nuclei_AreaShape_Area, na.rm = T),
+            propNonRespCytoplasm_Mean_Intensity = ifelse(all(is.na(propNonRespCytoplasm_Mean_Intensity)),NA,mean(propNonRespCytoplasm_Mean_Intensity, na.rm = T)),
+            propNonRespCytoplasm_Integrated_Intensity = ifelse(all(is.na(propNonRespCytoplasm_Integrated_Intensity)),NA,mean(propNonRespCytoplasm_Integrated_Intensity, na.rm = T)),
+            propNonRespNuclei_Mean_Intensity = ifelse(all(is.na(propNonRespNuclei_Mean_Intensity)),NA,mean(propNonRespNuclei_Mean_Intensity, na.rm = T)),
+            propNonRespNuclei_Integrated_Intensity = ifelse(all(is.na(propNonRespNuclei_Integrated_Intensity)),NA,mean(propNonRespNuclei_Integrated_Intensity, na.rm = T)),
+            cellCount_AnVPI = mean(cellCount_AnVPI, na.rm = T),
+            propCount_PI = mean(propCount_PI, na.rm = T),
+            propCount_AnV = mean(propCount_AnV, na.rm = T))
+
+# -------------------ADD RELATIVE CELL COUNTS TO SUMMARYDATA-------------------
+summaryData <- summaryData %>% group_by(replID,treatment,protein,dose_uM) %>% 
+  dplyr::mutate(relativeCellCount = imageCountParentObj/imageCountParentObj[1])
+
+# -------------------RELEVEL THE REPLICATES AND PROTEINS-----------------------
+summaryData$replID <- factor(summaryData$replID, levels = REPLICATE_ORDER)
+summaryData$protein <- factor(summaryData$protein, levels = PROTEIN_ORDER)
+
+# In project DDP; set the AnV and PI zero's in p21 replicate 3 at timeID >= 36 to NA
+if (PROJECT == "DDP"){
+  summaryData[summaryData$protein == "p21" & 
+                summaryData$replID == 3 &
+                summaryData$timeID > 35,c("propCount_AnV","propCount_PI")] <-  NA}
+
+# Refactorize the dose_um and dose_uMadj columns
+summaryData$dose_uM <- factor(as.numeric(as.character(summaryData$dose_uM)))
+
+# Save the data
+save(summaryData, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/06_","summaryData.RData"))  # Save only the data frame
+# load(file = paste0(PROJECT_PATH,OUTPUT_PATH,"RData/","06_summaryData.RData"))  # Save only the data frame
+#write_csv(summaryData,path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/20201014_INF_","summaryData.csv"))
+
+# Summarise controls
+
+dfTmp <- summaryData %>% filter(treatment %in% c("CDDP","DMEM")) %>% 
+  mutate(dose_uMadj = factor(ifelse(as.character(dose_uM) == "100", "0", as.character(dose_uM)),levels = c(0,1,2.5,5,10,15,20,25,50)),
+         dataForModel = ifelse(protein %in% c("p53", "p21","MDM2"),
+                               Nuclei_Integrated_Intensity,
+                               Cytoplasm_Integrated_Intensity)) %>%
+  group_by(treatment, dose_uMadj, cell_line, plateID, protein, replID, timeID, timeAfterExposure) %>%
+  summarise(dataForModel = ifelse(treatment == "DMEM",
+                                  mean(dataForModel, na.rm = T),
+                                  dataForModel)) %>%
+  ungroup()
+
+repnames <- c("1" = "Repl 1",
+              "2" = "Repl 2",
+              "3" = "Repl 3",
+              "4" = "Repl 4",
+              "p53" = "p53",
+              "MDM2" = "MDM2",
+              "p21" = "p21",
+              "BTG2" = "BTG2")
+
+# Make a plot
+ggplot() + geom_point(data = dfTmp, aes(x = timeAfterExposure, y = dataForModel, color = dose_uMadj), size = 0.7) + 
+  theme_classic() +
+  scale_color_viridis_d(name = expression(paste("Cisplatin ("*mu*"M)"))) +
+  ylab("GFP intensity (a.u.)") +
+  xlab("Time (h)") +
+  facet_grid(protein~replID, labeller = as_labeller(repnames)) +
+  theme(axis.title = element_text(size = 18),
+        strip.text = element_text(size = 14))
+ggsave(filename = paste0(outputDir_GR,DATE,"_GFPdata_Figs/","FigS6A_CDDP_data_unnormalised.pdf"), width = 6, height = 6)
+
+# -----------------------------------------------------------------------------
+# -----------------------SUBTRACT CONTROL CONDITION PER PLATE------------------
+# -----------------------------------------------------------------------------
+
+df <- summaryData
+refTreatment <- c("DMEM","DMSO")
+refConcentration <- c(100,0.2)
+
+# Get control summary
+dfControl <- df[df$treatment %in% refTreatment & df$dose_uM %in% refConcentration,] %>% 
+  select(-c(well)) %>%
+  group_by(treatment, dose_uM, cell_line, plateID, protein, replID, timeID, timeAfterExposure) %>% 
+  summarise_all(list(mean), na.rm = T) %>% ungroup()
+
+# Make summary per control condition
+dfRef <- df[df$treatment %in% refTreatment & df$dose_uM %in% refConcentration,] %>% 
+  select(-c(well,imageCountParentObj,
+            Nuclei_AreaShape_Area,
+            propNonRespCytoplasm_Mean_Intensity,
+            propNonRespCytoplasm_Integrated_Intensity,
+            propNonRespNuclei_Mean_Intensity,
+            propNonRespNuclei_Integrated_Intensity,
+            cellCount_AnVPI,
+            propCount_PI,
+            propCount_AnV,
+            relativeCellCount)) %>%
+  group_by(treatment, dose_uM, cell_line, plateID, protein, replID, timeID, timeAfterExposure) %>% 
+  summarise_all(list(control = mean), na.rm = T) %>% ungroup()
+
+dfRefDMEM <- dfRef %>% filter(treatment == "DMEM") %>% select(-c(treatment,dose_uM))
+dfRefDMSO <- dfRef %>% filter(treatment == "DMSO") %>% select(-c(treatment,dose_uM))
+
+# Check on NAs
+if (!any(is.na(dfRef))) {print("No NAs found!")}
+
+# Select treated condition
+dfCDDP <- df %>% filter(treatment == "CDDP")
+dfETO <- df %>% filter(treatment == "ETO")
+dfMYT <- df %>% filter(treatment == "MYT")
+dfDMEM <- dfControl %>% filter(treatment == "DMEM")
+dfDMSO <- dfControl %>% filter(treatment == "DMSO")
+
+# Merge dfTreatments with dfControl
+dfMergeCDDP <- left_join(dfCDDP,dfRefDMEM, by = c("cell_line", "plateID", "protein", "replID", "timeID", "timeAfterExposure"))
+dfMergeETO <- left_join(dfETO,dfRefDMSO, by = c("cell_line", "plateID", "protein", "replID", "timeID", "timeAfterExposure"))
+dfMergeMYT <- left_join(dfMYT,dfRefDMSO, by = c("cell_line", "plateID", "protein", "replID", "timeID", "timeAfterExposure"))
+dfMergeDMEM <- left_join(dfDMEM,dfRefDMEM, by = c("cell_line", "plateID", "protein", "replID", "timeID", "timeAfterExposure"))
+dfMergeDMSO <- left_join(dfDMSO,dfRefDMSO, by = c("cell_line", "plateID", "protein", "replID", "timeID", "timeAfterExposure"))
+
+# Bind the data frames
+dfMerge <- bind_rows(dfMergeCDDP,dfMergeETO,dfMergeMYT,dfMergeDMEM,dfMergeDMSO)
+
+# Convert NaN to NA
+dfMergeCDDP <- dfMergeCDDP %>% mutate_if(is.numeric, list(~na_if(., NaN)))
+
+# Do background subtraction per protein
+summaryDataBackgroundSub <- dfMerge %>% mutate(
+  Cytoplasm_Mean_Intensity = Cytoplasm_Mean_Intensity - Cytoplasm_Mean_Intensity_control,
+  Cytoplasm_Integrated_Intensity = Cytoplasm_Integrated_Intensity - Cytoplasm_Integrated_Intensity_control,
+  Nuclei_Mean_Intensity = Nuclei_Mean_Intensity - Nuclei_Mean_Intensity_control,
+  Nuclei_Integrated_Intensity = Nuclei_Integrated_Intensity - Nuclei_Integrated_Intensity_control)
+
+# Make a plot
+dfTmp <- summaryDataBackgroundSub %>% filter(treatment %in% c("CDDP","DMEM"), dose_uM %in% c(100,1,2.5,5))
+ggplot() + geom_point(data = dfTmp, aes(x = timeID, y = Nuclei_Integrated_Intensity, color = dose_uM)) + 
+  facet_grid(protein~replID)
+
+# -----------------------------------------------------------------------------
+# ---------------------------DO MIN-MAX NORMALISATION--------------------------
+# -----------------------------------------------------------------------------
+
+# Do min-max normalisation for all conditions
+summaryDataNorm <- doMinMaxNormAllConditions(
+  df = summaryDataBackgroundSub,
+  normPerCompCtrlSet = F,
+  columnsForNormalisation = list(c("Cytoplasm_Mean_Intensity","Nuclei_Mean_Intensity"),
+                                 c("Cytoplasm_Integrated_Intensity", "Nuclei_Integrated_Intensity")),
+  by = c("protein","replID"), combineCytAndNuc = T)
+
+# Make a plot
+colnames(summaryDataNorm)
+dfTmp <- summaryDataNorm %>% filter(treatment %in% c("CDDP","DMEM"), dose_uM %in% c(100,1,2.5,5))
+ggplot() + geom_point(data = dfTmp, aes(x = timeID, y = Nuclei_Integrated_Intensity_Norm, color = dose_uM)) + 
+  facet_grid(protein~replID)
+
+# Replace the dose_uM value for the control concentration with 0
+summaryDataNorm$dose_uM <- as.numeric(as.character(droplevels(summaryDataNorm$dose_uM)))
+summaryDataNorm$dose_uMadj <- sapply(1:nrow(summaryDataNorm), function(rownr){
+  ifelse(summaryDataNorm$dose_uM[rownr] == 100 & 
+           summaryDataNorm$treatment[rownr] == "DMEM", 0, summaryDataNorm$dose_uM[rownr])})
+
+# Refactorize the dose_uM and dose_uMadj columns
+summaryDataNorm$dose_uMadj <- factor(as.numeric(as.character(summaryDataNorm$dose_uMadj)))
+summaryDataNorm$dose_uM <- factor(as.numeric(as.character(summaryDataNorm$dose_uM)))
+
+# Interpolate the separate replicates
+summaryDataNorm <- as.data.frame(summaryDataNorm %>% group_by(treatment, dose_uM, replID, protein) %>% mutate(
+  timepoints = seq(1,TIME_BETWEEN_FRAMES*length(timeID),TIME_BETWEEN_FRAMES),
+  interpol_Nuclei_Integrated_Intensity_Norm = predict(lm(Nuclei_Integrated_Intensity_Norm ~ bs(timeAfterExposure,df = 6, degree = 3,intercept = F)), 
+                                                      data.frame(timeAfterExposure = timepoints)),
+  interpol_Nuclei_Mean_Intensity_Norm = predict(lm(Nuclei_Mean_Intensity_Norm ~ bs(timeAfterExposure,df = 6, degree = 3,intercept = F)), 
+                                                data.frame(timeAfterExposure = timepoints)),
+  interpol_Cytoplasm_Integrated_Intensity_Norm = predict(lm(Cytoplasm_Integrated_Intensity_Norm ~ bs(timeAfterExposure,df = 6, degree = 3,intercept = F)), 
+                                                         data.frame(timeAfterExposure = timepoints)),
+  interpol_Cytoplasm_Mean_Intensity_Norm = predict(lm(Cytoplasm_Mean_Intensity_Norm ~ bs(timeAfterExposure,df = 6, degree = 3,intercept = F)), 
+                                                   data.frame(timeAfterExposure = timepoints)),
+  interpol_relativeCellCount = predict(lm(relativeCellCount ~ bs(timeAfterExposure,df = 6, degree = 3,intercept = F)), 
+                                       data.frame(timeAfterExposure = timepoints)),
+  interpol_absoluteCellCount = predict(lm(imageCountParentObj ~ bs(timeAfterExposure,df = 6, degree = 3,intercept = F)), 
+                                       data.frame(timeAfterExposure = timepoints))))
+
+# Make a plot
+colnames(summaryDataNorm)
+dfTmp <- summaryDataNorm %>% filter(treatment %in% c("CDDP","DMEM"), dose_uM %in% c(100,1,2.5,5))
+ggplot() + geom_point(data = dfTmp, aes(x = timepoints, y = Nuclei_Integrated_Intensity_Norm, color = dose_uM)) + 
+  facet_grid(protein~replID)
+
+dfTmp <- summaryDataNorm %>% filter(treatment %in% c("CDDP","DMEM"), dose_uM %in% c(100,1,2.5,5))
+ggplot() + geom_point(data = dfTmp, aes(x = timepoints, y = interpol_Nuclei_Integrated_Intensity_Norm, color = dose_uM)) + 
+  facet_grid(protein~replID)
+
+# Make data for parameter estimation.
+# Make one data column to be used for parameter estimation, i.e. the GFP expression 
+# of data in nucleus and cytoplasm according to their location of expression 
+summaryDataNorm$data4modelInterpol <- sapply(1:nrow(summaryDataNorm), function(rowNr){
+  ifelse(summaryDataNorm[rowNr,"protein"] %in% c("p53", "p21","MDM2"),
+         summaryDataNorm[rowNr,"interpol_Nuclei_Integrated_Intensity_Norm"], 
+         summaryDataNorm[rowNr,"interpol_Cytoplasm_Integrated_Intensity_Norm"])})
+summaryDataNorm$data4modelReal <- sapply(1:nrow(summaryDataNorm), function(rowNr){
+  ifelse(summaryDataNorm[rowNr,"protein"] %in% c("p53", "p21","MDM2"),
+         summaryDataNorm[rowNr,"Nuclei_Integrated_Intensity_Norm"], 
+         summaryDataNorm[rowNr,"Cytoplasm_Integrated_Intensity_Norm"])})
+
+ggplot(summaryDataNorm %>% filter(protein %in% c("p53","p21","MDM2","BTG2"))) + 
+  geom_point(aes(x = timeAfterExposure, y = data4modelReal, color = dose_uMadj)) + 
+  geom_line(aes(x = timeAfterExposure, y = data4modelInterpol, color = dose_uMadj)) + 
+  facet_grid(~protein)
+
+
+# Save the data
+save(summaryDataNorm, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/07_","summaryDataNorm.RData")) # Save only the data frame
+#load("/data/muriel/Projects/DDP/DataAnalysis/Dynamics/Output/RData/07_summaryDataNorm.RData")
+write.table(summaryDataNorm, file = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_summaryData_",PROJECT,".txt"))
+
+
+# Split the summary data frame in seperate data frames for different compounds.
+CDDPdata <- summaryDataNorm[summaryDataNorm$treatment %in% c("CDDP","DMEM"),]
+ETOdata <- summaryDataNorm[summaryDataNorm$treatment == "ETO" | 
+                             (summaryDataNorm$treatment == "DMSO" & summaryDataNorm$dose_uM == 0.2),]
+MYTdata <- summaryDataNorm[summaryDataNorm$treatment == "MYT" | 
+                             (summaryDataNorm$treatment == "DMSO" & summaryDataNorm$dose_uM == 0.2),]
+DMEMdata <- summaryDataNorm[summaryDataNorm$treatment == "DMEM",]
+DMSOdata <- summaryDataNorm[summaryDataNorm$treatment == "DMSO" &
+                              summaryDataNorm$dose_uM == 0.2,]
+
+# Make data frames including cell counts
+CDDP4Model <- prepareD4M(CDDPdata, absolute = T)
+ETO4Model <- prepareD4M(ETOdata, absolute = T)
+MYT4Model <- prepareD4M(MYTdata, absolute = T)
+DMEM4Model <- prepareD4M(DMEMdata, absolute = T)
+DMSO4Model <- prepareD4M(DMSOdata, absolute = T)
+
+# Save the data frames to a csv file
+save(CDDP4Model, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/08a_CDDPdata_",PROJECT,".RData"))
+save(ETO4Model, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/08b_ETOdata_",PROJECT,".RData"))
+save(MYT4Model, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/08c_MYTdata_",PROJECT,".RData"))
+save(DMEM4Model, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/08d_DMEMdata_",PROJECT,".RData"))
+save(DMSO4Model, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/08e_DMSOdata_",PROJECT,".RData"))
+
+# Write the data frames to a csv file
+write_csv(CDDP4Model, path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_MH_CDDPdata_","All_",PROJECT,".csv"))
+write_csv(ETO4Model, path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_MH_ETOdata_","All_",PROJECT,".csv"))
+write_csv(MYT4Model, path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_MH_MYTdata_","All_",PROJECT,".csv"))
+write_csv(DMEM4Model, path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_MH_DMEMdata_","All_",PROJECT,".csv"))
+write_csv(DMSO4Model, path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_MH_DMSOdata_","All_",PROJECT,".csv"))
