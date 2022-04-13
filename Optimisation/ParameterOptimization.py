@@ -69,18 +69,18 @@ if __name__ == '__main__':
             # Create the path and the file
             m1 = re.search("/", dataPathAndFile)
             if m1:
-                pathToInputFolder = "/".join(dataPathAndFile.split("/")[0:-1]) + "/"
+                pathToDataInputFolder = "/".join(dataPathAndFile.split("/")[0:-1]) + "/"
                 dataFile = dataPathAndFile.split("/")[-1]
             else:
-                pathToInputFolder = ""
+                pathToDataInputFolder = ""
                 dataFile = dataPathAndFile
 
             m2 = re.search("/", dataPathAndFile)
             if m2:
-                pathToInputFolder = "/".join(odePathAndFile.split("/")[0:-1]) + "/"
+                pathToModelInputFolder = "/".join(odePathAndFile.split("/")[0:-1]) + "/"
                 odeFile = odePathAndFile.split("/")[-1]
             else:
-                pathToInputFolder = ""
+                pathToModelInputFolder = ""
                 odeFile = odePathAndFile
 
             pathToOutput = sys.argv[3]
@@ -116,8 +116,8 @@ if __name__ == '__main__':
     print("This is the current date and time: %s" % DATETIME)
 
     # Make paths to the files
-    pathToData = pathToInputFolder + dataFile
-    pathToODEs = pathToInputFolder + odeFile
+    pathToData = pathToDataInputFolder + dataFile
+    pathToODEs = pathToModelInputFolder + odeFile
 
     # Create directories if they do not exist
     if os.path.isdir(pathToOutput):
@@ -178,7 +178,8 @@ if __name__ == '__main__':
     # Save the metadata
     Metadata = ["MODEL = \"" + MODEL + "\"",
                 "DATETIME = \"" + DATETIME + "\"",
-                "pathToInputFolder = \"" + pathToInputFolder + "\"",
+                "pathToDataInputFolder = \"" + pathToDataInputFolder + "\"",
+                "pathToModelInputFolder = \"" + pathToModelInputFolder + "\"",
                 "dataFile = \"" + dataFile + "\"",
                 "pathToData = \"" + pathToData + "\"",
                 "odeFile = \"" + odeFile + "\"",
