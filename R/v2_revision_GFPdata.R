@@ -45,19 +45,11 @@ source(paste0("/data/muriel/Projects/","DDP","/DataAnalysis/Dynamics/","RScripts
 # Choose project
 PROJECT_PATH <- DDP_FOLDER_PATH 
 
-# Load the data or the environment from script 02
-load(file = paste0(PROJECT_PATH,OUTPUT_PATH,"RData/","03_SingleCellData.RData")) # Load only the data frame
-
 DATE <- "20220411" 
 outputDir_GR <- "/data/muriel/Projects/DDP/DataAnalysis/BioSpyder/Exp009_BioSpyder_Marije/DEGAnalysis/Output/Figures/"
 
-if (PROJECT == "DDP"){
-  REPLICATE_ORDER <- c("1","2","3","4")
-  PROTEIN_ORDER <- c("p53","MDM2","p21","BTG2")
-} else if (PROJECT == "INF") {
-  REPLICATE_ORDER <- c("1","2","3")
-  PROTEIN_ORDER = c("ICAM1","A20")
-}
+REPLICATE_ORDER <- c("1","2","3","4")
+PROTEIN_ORDER <- c("p53","MDM2","p21","BTG2")
 
 dir.create(paste0(outputDir_GR,DATE,"_GFPdata_Figs"))
 
@@ -65,35 +57,10 @@ dir.create(paste0(outputDir_GR,DATE,"_GFPdata_Figs"))
 # ----------------------------MAKE SUMMARY DATA--------------------------------
 # -----------------------------------------------------------------------------
 
-# Make column with well information
-dfListSCD <- extractWell(dfListSCD)
-
-# ------------------ CALCULATE AVERAGE OF CELLS IN ONE IMAGE ------------------
-summaryDataPerImage <- combineProteinSummariesPerImage(dfListSCD, CHANNELS)
-
-# Remove dfListSCD from environment, because it is very big
-rm("dfListSCD")
-rm(btg2_rep1,btg2sum)
-gc()
-
-# Rename locationID columns
-summaryDataPerImage$imageNumber <- substr(summaryDataPerImage$locationID,5,5)
-
-# Ungroup
-summaryDataPerImage <- summaryDataPerImage %>% ungroup()
-
-# Set some columns classes to factor
-summaryDataPerImage <- summaryDataPerImage %>% 
-  mutate(treatment = factor(treatment),
-         dose_uM = factor(dose_uM),
-         locationID = as.factor(locationID),
-         imageNumber = factor(imageNumber),
-         well = factor(well),
-         replID = factor(replID))
-
 # Save the summary data as it is
-save(summaryDataPerImage, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/04_", "summaryDataPerImage.RData"))  # Save only the data frame
-#load(file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/04_", "summaryDataPerImage.RData"))  # Load the data frame
+# load(file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/04_", "summaryDataPerImage.RData"))  # Load the data frame
+# write_csv(summaryDataPerImage, file = "/data/muriel/Projects/PHH/DataAnalysis/GFPdata/SummaryData.csv")
+summaryDataPerImage <- read_csv(file = "/data/muriel/Projects/PHH/DataAnalysis/GFPdata/SummaryData.csv")
 
 # -------------------MAKE PLOTS OF THE TECHNICAL REPLICATES PER WELL-------------------
 dirPath <- paste0(PROJECT_PATH,OUTPUT_PATH,"Figures/",DATE,"_TechnicalReplicates/")
@@ -126,18 +93,10 @@ for (p in PROTS_OF_INTEREST) {
       }}}}
 
 # -------------------REMOVE TECHNICAL REPLICATES-------------------
-if (PROJECT == "DDP"){
-  summaryDataPerImageFiltered <- summaryDataPerImage %>% 
-    filter(!((protein == "p21" & treatment == "DMEM" & replID == 4 & locationID == "F23_1") | 
-               (protein == "p53" & treatment == "ETO" & replID == 3 & locationID == "H19_2") |
-               (protein %in% c("MDM2","p21","BTG2") & replID == 1 & treatment == "MYT")))
-} else if (PROJECT == "INF") {summaryDataPerImageFiltered <- summaryDataPerImage %>%
-  filter(!(protein == "ICAM1" & treatment == "ETO" & replID == 1 & locationID == "J19_1"))}
-
-
-# Save the filtered summary data
-save(summaryDataPerImageFiltered, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/05_", "summaryDataPerImageFiltered.RData"))  # Save only the data frame
-#load(paste0(PROJECT_PATH, OUTPUT_PATH,"RData/05_", "summaryDataPerImageFiltered.RData"))  # Save only the data frame
+summaryDataPerImageFiltered <- summaryDataPerImage %>% 
+  filter(!((protein == "p21" & treatment == "DMEM" & replID == 4 & locationID == "F23_1") | 
+             (protein == "p53" & treatment == "ETO" & replID == 3 & locationID == "H19_2") |
+             (protein %in% c("MDM2","p21","BTG2") & replID == 1 & treatment == "MYT")))
 
 # -------------------CALCULATE AVERAGES PER WELL-------------------
 summaryData <- summaryDataPerImageFiltered %>% group_by(treatment,dose_uM,cell_line,plateID,protein,
@@ -165,18 +124,12 @@ summaryData$replID <- factor(summaryData$replID, levels = REPLICATE_ORDER)
 summaryData$protein <- factor(summaryData$protein, levels = PROTEIN_ORDER)
 
 # In project DDP; set the AnV and PI zero's in p21 replicate 3 at timeID >= 36 to NA
-if (PROJECT == "DDP"){
-  summaryData[summaryData$protein == "p21" & 
-                summaryData$replID == 3 &
-                summaryData$timeID > 35,c("propCount_AnV","propCount_PI")] <-  NA}
+summaryData[summaryData$protein == "p21" & 
+              summaryData$replID == 3 &
+              summaryData$timeID > 35,c("propCount_AnV","propCount_PI")] <-  NA
 
 # Refactorize the dose_um and dose_uMadj columns
 summaryData$dose_uM <- factor(as.numeric(as.character(summaryData$dose_uM)))
-
-# Save the data
-save(summaryData, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/06_","summaryData.RData"))  # Save only the data frame
-# load(file = paste0(PROJECT_PATH,OUTPUT_PATH,"RData/","06_summaryData.RData"))  # Save only the data frame
-#write_csv(summaryData,path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/20201014_INF_","summaryData.csv"))
 
 # Summarise controls
 
@@ -248,20 +201,14 @@ if (!any(is.na(dfRef))) {print("No NAs found!")}
 
 # Select treated condition
 dfCDDP <- df %>% filter(treatment == "CDDP")
-dfETO <- df %>% filter(treatment == "ETO")
-dfMYT <- df %>% filter(treatment == "MYT")
 dfDMEM <- dfControl %>% filter(treatment == "DMEM")
-dfDMSO <- dfControl %>% filter(treatment == "DMSO")
 
 # Merge dfTreatments with dfControl
 dfMergeCDDP <- left_join(dfCDDP,dfRefDMEM, by = c("cell_line", "plateID", "protein", "replID", "timeID", "timeAfterExposure"))
-dfMergeETO <- left_join(dfETO,dfRefDMSO, by = c("cell_line", "plateID", "protein", "replID", "timeID", "timeAfterExposure"))
-dfMergeMYT <- left_join(dfMYT,dfRefDMSO, by = c("cell_line", "plateID", "protein", "replID", "timeID", "timeAfterExposure"))
 dfMergeDMEM <- left_join(dfDMEM,dfRefDMEM, by = c("cell_line", "plateID", "protein", "replID", "timeID", "timeAfterExposure"))
-dfMergeDMSO <- left_join(dfDMSO,dfRefDMSO, by = c("cell_line", "plateID", "protein", "replID", "timeID", "timeAfterExposure"))
 
 # Bind the data frames
-dfMerge <- bind_rows(dfMergeCDDP,dfMergeETO,dfMergeMYT,dfMergeDMEM,dfMergeDMSO)
+dfMerge <- bind_rows(dfMergeCDDP,dfMergeDMEM)
 
 # Convert NaN to NA
 dfMergeCDDP <- dfMergeCDDP %>% mutate_if(is.numeric, list(~na_if(., NaN)))
@@ -350,39 +297,18 @@ ggplot(summaryDataNorm %>% filter(protein %in% c("p53","p21","MDM2","BTG2"))) +
   facet_grid(~protein)
 
 
-# Save the data
-save(summaryDataNorm, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/07_","summaryDataNorm.RData")) # Save only the data frame
-#load("/data/muriel/Projects/DDP/DataAnalysis/Dynamics/Output/RData/07_summaryDataNorm.RData")
-write.table(summaryDataNorm, file = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_summaryData_",PROJECT,".txt"))
-
-
 # Split the summary data frame in seperate data frames for different compounds.
 CDDPdata <- summaryDataNorm[summaryDataNorm$treatment %in% c("CDDP","DMEM"),]
-ETOdata <- summaryDataNorm[summaryDataNorm$treatment == "ETO" | 
-                             (summaryDataNorm$treatment == "DMSO" & summaryDataNorm$dose_uM == 0.2),]
-MYTdata <- summaryDataNorm[summaryDataNorm$treatment == "MYT" | 
-                             (summaryDataNorm$treatment == "DMSO" & summaryDataNorm$dose_uM == 0.2),]
 DMEMdata <- summaryDataNorm[summaryDataNorm$treatment == "DMEM",]
-DMSOdata <- summaryDataNorm[summaryDataNorm$treatment == "DMSO" &
-                              summaryDataNorm$dose_uM == 0.2,]
 
 # Make data frames including cell counts
 CDDP4Model <- prepareD4M(CDDPdata, absolute = T)
-ETO4Model <- prepareD4M(ETOdata, absolute = T)
-MYT4Model <- prepareD4M(MYTdata, absolute = T)
 DMEM4Model <- prepareD4M(DMEMdata, absolute = T)
-DMSO4Model <- prepareD4M(DMSOdata, absolute = T)
 
 # Save the data frames to a csv file
 save(CDDP4Model, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/08a_CDDPdata_",PROJECT,".RData"))
-save(ETO4Model, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/08b_ETOdata_",PROJECT,".RData"))
-save(MYT4Model, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/08c_MYTdata_",PROJECT,".RData"))
 save(DMEM4Model, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/08d_DMEMdata_",PROJECT,".RData"))
-save(DMSO4Model, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/08e_DMSOdata_",PROJECT,".RData"))
 
-# Write the data frames to a csv file
-write_csv(CDDP4Model, path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_MH_CDDPdata_","All_",PROJECT,".csv"))
-write_csv(ETO4Model, path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_MH_ETOdata_","All_",PROJECT,".csv"))
-write_csv(MYT4Model, path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_MH_MYTdata_","All_",PROJECT,".csv"))
-write_csv(DMEM4Model, path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_MH_DMEMdata_","All_",PROJECT,".csv"))
-write_csv(DMSO4Model, path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_MH_DMSOdata_","All_",PROJECT,".csv"))
+# # Write the data frames to a csv file
+# write_csv(CDDP4Model, path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_MH_CDDPdata_","All_",PROJECT,".csv"))
+# write_csv(DMEM4Model, path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_MH_DMEMdata_","All_",PROJECT,".csv"))
