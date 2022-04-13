@@ -1,27 +1,13 @@
-# Script name 05_CellDeathFigures.R as part of
-# 00_SetGlobalVars_XXX.R
-# 01_Functions.R
-# 02_MakeSingleCellDataList.R
-# 03_MakeSummaryDataPerImage.R
-# 04_MakeDataForModeling.R
-# 05_CellDeathFigures.R
-# 06_MakeOtherPlots.R
-# 07_CombineReplicates.R
-# 08_FinalMeanFigures.R
-# 
-# Short description:
-# R script to combine single cell imaging data of 
+# Description:
+# R script to make PI and AnV cell death plots
 # 1) p53, Mdm2, Btg2 and p21 reporters
 # 2) up to 4 replicates, and 
-# 3) GFP channels and AnV channels, that is contained in variable dfListSCD
-# into a matrix called "summaryData" and 
-# the normalized data matrix stored in "summaryDataNorm". 
+# 3) GFP channels and AnV/PI channels
 
-# Starting data: 2018-07-19
-# Last modified: 2021-09-10
+# Last modified: 2022-04-13
 # Written by Muriel Heldring
 
-# R version 4.1.1 (2021-08-10) -- "Kick Things"
+# R version 4.1.3 (2022-03-10) -- "One Push-Up"
 
 # Clear environment
 rm(list = ls())
@@ -45,12 +31,18 @@ source(paste0("/data/muriel/Projects/","DDP","/DataAnalysis/Dynamics/","RScripts
 # Choose project
 PROJECT_PATH <- DDP_FOLDER_PATH 
 
-load("/data/muriel/Projects/DDP/DataAnalysis/Dynamics/Output/RData/07_summaryDataNorm.RData")
-load("/data/muriel/Projects/DDP/DataAnalysis/Dynamics/Output/RData/02_PI_PopulationData.RData")
-
 outputDir_GR <- "/data/muriel/Projects/DDP/DataAnalysis/BioSpyder/Exp009_BioSpyder_Marije/DEGAnalysis/Output/Figures/"
 
 DATE <- "20220411"
+
+# Load the data
+summaryDataNorm <- read_csv(file = "/data/muriel/Projects/PHH/DataAnalysis/GFPdata/SummaryDataNorm.csv",
+                            col_types = paste0("ffccffddf",paste(rep("d",41-9),collapse = "")))
+
+# Make factors
+summaryDataNorm <- summaryDataNorm %>%
+  mutate(dose_uMadj = factor(dose_uMadj, levels = c(0,1,2.5,5,10,15,20,25,50)),
+         protein = factor(protein, levels = c("p53","MDM2","p21","BTG2")))
 
 # Make exploring figure
 ggplot(summaryDataNorm %>% filter(treatment %in% c("CDDP","DMEM"))) + 
@@ -62,12 +54,6 @@ ggplot(summaryDataNorm %>% filter(treatment %in% c("CDDP","DMEM"))) +
   geom_point(aes(x = timeAfterExposure, y = propCount_AnV, color = dose_uMadj)) +
   scale_color_viridis_d() +
   facet_grid(replID ~ protein)
-
-colnames(PIdf)
-ggplot(PIdf %>% filter(treatment %in% c("CDDP","DMEM"))) + 
-  geom_point(aes(x = timeAfterExposure, y = propCount_PI, color = dose_uM)) +
-  scale_color_viridis_d() +
-  facet_grid(replID ~ cell_line)
 
 # Select first replicates
 subset <- summaryDataNorm %>% filter(treatment %in% c("CDDP","DMEM")) %>% #, (replID == 1 | (replID == 2 & protein == "p53"))) %>% 

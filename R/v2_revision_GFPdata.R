@@ -293,16 +293,11 @@ DMEMdata <- summaryDataNorm[summaryDataNorm$treatment == "DMEM",]
 CDDP4Model <- prepareD4M(CDDPdata, absolute = T)
 DMEM4Model <- prepareD4M(DMEMdata, absolute = T)
 
-# Save the data frames to a csv file
-save(CDDP4Model, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/08a_CDDPdata_",PROJECT,".RData"))
-save(DMEM4Model, file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/08d_DMEMdata_",PROJECT,".RData"))
+# Write the data frames to a csv file
+write_csv(CDDP4Model, path = "/data/muriel/Projects/PHH/DataAnalysis/GFPdata/CDDP4Model.csv")
+write_csv(summaryDataNorm, path = "/data/muriel/Projects/PHH/DataAnalysis/GFPdata/SummaryDataNorm.csv")
 
-# # Write the data frames to a csv file
-# write_csv(CDDP4Model, path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_MH_CDDPdata_","All_",PROJECT,".csv"))
-# write_csv(DMEM4Model, path = paste0(PROJECT_PATH, OUTPUT_PATH,"DataTables/",DATE,"_MH_DMEMdata_","All_",PROJECT,".csv"))
-
-
-# Create Summary Figures (delay and peak)
+### Create Summary Figures (delay and peak) ###
 
 # Change to tibble
 CDDP4Model <- as_tibble(CDDP4Model)
