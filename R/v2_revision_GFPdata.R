@@ -309,7 +309,7 @@ CDDP4Model <- CDDP4Model %>% filter(StateVar %in% c("p53","MDM2","BTG2","p21") &
 CDDP4Model <- CDDP4Model %>% mutate(StateVar = factor(StateVar,levels = c("p53","MDM2","p21","BTG2")))
 
 # Write the data frames to a csv file
-write_csv(CDDP4Model, path = "/data/muriel/Projects/PHH/DataAnalysis/GFPdata/CDDP4Model.csv")
+write_csv(CDDP4Model, path = "/data/muriel/Projects/PHH/DataAnalysis/GFPdata/CDDPdata4Model.csv")
 
 ggplot() + 
   geom_line(data = CDDP4Model, aes(x = timepoints, y = data4modelInterpol, color = dose_uMadj)) + 
