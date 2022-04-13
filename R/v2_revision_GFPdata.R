@@ -45,9 +45,7 @@ dir.create(paste0(outputDir_GR,DATE,"_GFPdata_Figs"))
 # ----------------------------MAKE SUMMARY DATA--------------------------------
 # -----------------------------------------------------------------------------
 
-# Save the summary data as it is
-# load(file = paste0(PROJECT_PATH, OUTPUT_PATH,"RData/04_", "summaryDataPerImage.RData"))  # Load the data frame
-# write_csv(summaryDataPerImage, file = "/data/muriel/Projects/PHH/DataAnalysis/GFPdata/SummaryData.csv")
+# Load data
 summaryDataPerImage <- read_csv(file = "/data/muriel/Projects/PHH/DataAnalysis/GFPdata/SummaryData.csv")
 
 # -------------------MAKE PLOTS OF THE TECHNICAL REPLICATES PER WELL-------------------
