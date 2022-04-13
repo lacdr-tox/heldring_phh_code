@@ -1,27 +1,15 @@
-# Script name 03_MakeSummaryDataPerImage.R as part of
-# 00_SetGlobalVars_XXX.R
-# 01_Functions.R
-# 02_MakeSingleCellDataList.R
-# 03_MakeSummaryDataPerImage.R
-# 04_MakeDataForModeling.R
-# 05_CellDeathFigures.R
-# 06_MakeOtherPlots.R
-# 07_CombineReplicates.R
-# 08_FinalMeanFigures.R
-# 
-# Short description:
-# R script to combine single cell imaging data of 
+# Description:
+# R script to make data for modeling purpose. 
+# Filtering of data.
+# Calculate mean of technical replicates.
 # 1) p53, Mdm2, Btg2 and p21 reporters
 # 2) up to 4 replicates, and 
-# 3) GFP channels and AnV channels, that is contained in variable dfListSCD
-# into a matrix called "summaryData" and 
-# the normalized data matrix stored in "summaryDataNorm". 
+# 3) GFP channels and AnV/PI channels
 
-# Starting data: 2018-07-19
-# Last modified: 2022-03-31
+# Last modified: 2022-04-13
 # Written by Muriel Heldring
 
-# R version 4.1.1 (2021-08-10) -- "Kick Things"
+# R version 4.1.3 (2022-03-10) -- "One Push-Up"
 
 # Clear environment
 rm(list = ls())
